@@ -12,7 +12,7 @@
   "@google/genai": "latest",
   "dotenv": "^16.4.5",
   "express": "^4.19.2",
-  "lucide-react": "^3.44.0",
+  "lucide-react": "latest",
   "react": "^18.3.1",
   "react-dom": "^18.3.1"
 },
