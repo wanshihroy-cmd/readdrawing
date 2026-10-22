@@ -1,0 +1,6 @@
+{
+  "name": "WireHarness-RFQ-Analyzer",
+  "description": "線材加工專用 RFQ 工程圖智慧分析工具，支援 PDF 圖面辨識、規格擷取與報價管理",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
