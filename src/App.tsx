@@ -118,42 +118,57 @@ export default function App() {
     setIsLoading(true);
     setErrorMessage(null);
     setFallbackAlert(null);
-    setLoadingStep('正在透過前端直連 Gemini 模型解析工程圖面結構...');
+    setLoadingStep('正在處理圖面資料並透過前端直連 Gemini 模型...');
 
     try {
-      // 確保從環境變數或安全方式取得 API Key (若在 Vite 中可使用 import.meta.env.VITE_GEMINI_API_KEY)
       const apiKey = (import.meta as any).env?.VITE_GEMINI_API_KEY || (window as any).GEMINI_API_KEY || '';
       
       if (!apiKey) {
         throw new Error('找不到 Gemini API Key，請確認是否已在環境變數 (VITE_GEMINI_API_KEY) 中設定。');
       }
 
-      // 動態引入 Google GenAI SDK
       const { GoogleGenAI, Type } = await import('@google/genai');
       const ai = new GoogleGenAI({ apiKey });
 
-      // 決定要使用的模型 (預設使用 gemini-2.5-flash 或指定模型)
       const actualModel = modelToRequest && modelToRequest !== 'auto' ? modelToRequest : 'gemini-2.5-flash';
       
       setLoadingStep(`正在調用 ${actualModel} 進行圖面特徵擷取...`);
 
-      // 準備上傳的圖片/檔案資料
+      // 💡 關鍵修正：清洗與轉換 Data URL，確保符合 Gemini SDK 的純 Base64 格式要求
+      let cleanBase64 = b64;
+      let actualMime = mime || 'image/png';
+
+      if (b64.startsWith('data:')) {
+        const commaIndex = b64.indexOf(',');
+        if (commaIndex !== -1) {
+          const header = b64.substring(0, commaIndex);
+          const content = b64.substring(commaIndex + 1);
+          
+          if (header.includes('base64')) {
+            cleanBase64 = content; // 已經是 base64，只要拔掉頭部
+          } else {
+            // 如果是 SVG utf8 等文字型 Data URL，轉成 Base64
+            const decodedSvg = decodeURIComponent(content);
+            cleanBase64 = btoa(unescape(encodeURIComponent(decodedSvg)));
+            actualMime = 'image/svg+xml';
+          }
+        }
+      }
+
       const imagePart = {
         inlineData: {
-          data: b64,
-          mimeType: mime,
+          data: cleanBase64,
+          mimeType: actualMime,
         },
       };
 
       const promptText = customPrompt || '請仔細分析此張工程圖面，擷取所有 Connector、Terminal、線規、線長、數量與加工規格，並嚴格遵循未提及即填「未提供」的原則。';
 
-      // 呼叫 Gemini 模型
       const response = await ai.models.generateContent({
         model: actualModel,
         contents: [imagePart, promptText],
         config: {
           responseMimeType: 'application/json',
-          // 如果您的專案有定義回應 Schema，也可以在此處加入 responseSchema
         }
       });
 
@@ -175,6 +190,7 @@ export default function App() {
   };
   
 
+  
   // Re-analyze current drawing (重新分析)
   const handleReanalyze = () => {
     if (!fileDataUrl || !mimeType) {
