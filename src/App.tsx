@@ -108,7 +108,7 @@ export default function App() {
 
   
 // Call Gemini API directly from the client side (Frontend SDK)
-  const triggerAnalysis = async (
+const triggerAnalysis = async (
     b64: string,
     mime: string,
     name: string,
@@ -118,7 +118,7 @@ export default function App() {
     setIsLoading(true);
     setErrorMessage(null);
     setFallbackAlert(null);
-    setLoadingStep('正在處理圖面資料並透過前端直連 Gemini 模型...');
+    setLoadingStep('正在透過前端直連 Gemini 模型解析工程圖面...');
 
     try {
       const apiKey = (import.meta as any).env?.VITE_GEMINI_API_KEY || (window as any).GEMINI_API_KEY || '';
@@ -127,14 +127,13 @@ export default function App() {
         throw new Error('找不到 Gemini API Key，請確認是否已在環境變數 (VITE_GEMINI_API_KEY) 中設定。');
       }
 
-      const { GoogleGenAI, Type } = await import('@google/genai');
+      const { GoogleGenAI } = await import('@google/genai');
       const ai = new GoogleGenAI({ apiKey });
 
       const actualModel = modelToRequest && modelToRequest !== 'auto' ? modelToRequest : 'gemini-3.8-flash';
       
       setLoadingStep(`正在調用 ${actualModel} 進行圖面特徵擷取...`);
 
-      // 💡 關鍵修正：清洗與轉換 Data URL，確保符合 Gemini SDK 的純 Base64 格式要求
       let cleanBase64 = b64;
       let actualMime = mime || 'image/png';
 
@@ -145,9 +144,8 @@ export default function App() {
           const content = b64.substring(commaIndex + 1);
           
           if (header.includes('base64')) {
-            cleanBase64 = content; // 已經是 base64，只要拔掉頭部
+            cleanBase64 = content;
           } else {
-            // 如果是 SVG utf8 等文字型 Data URL，轉成 Base64
             const decodedSvg = decodeURIComponent(content);
             cleanBase64 = btoa(unescape(encodeURIComponent(decodedSvg)));
             actualMime = 'image/svg+xml';
@@ -164,6 +162,8 @@ export default function App() {
 
       const promptText = customPrompt || '請仔細分析此張工程圖面，擷取所有 Connector、Terminal、線規、線長、數量與加工規格，並嚴格遵循未提及即填「未提供」的原則。';
 
+      console.log('Sending request to Gemini model:', actualModel);
+
       const response = await ai.models.generateContent({
         model: actualModel,
         contents: [imagePart, promptText],
@@ -173,21 +173,33 @@ export default function App() {
       });
 
       const responseText = response.text;
+      console.log('Raw model response:', responseText);
+
       if (!responseText) {
         throw new Error('模型未回傳任何分析結果資料。');
       }
 
-      const parsedData = JSON.parse(responseText);
+      // 清洗可能存在的 Markdown JSON 標記
+      let jsonString = responseText.trim();
+      if (jsonString.startsWith('```json')) {
+        jsonString = jsonString.replace(/^```json/, '').replace(/```$/, '').trim();
+      } else if (jsonString.startsWith('```')) {
+        jsonString = jsonString.replace(/^```/, '').replace(/```$/, '').trim();
+      }
+
+      const parsedData = JSON.parse(jsonString);
       setData(parsedData);
 
     } catch (err: any) {
       console.error('Client-side analysis failed:', err);
-      setErrorMessage(err.message || '分析發生錯誤，請檢查圖面檔案或 API Key 是否正確。');
+      setErrorMessage(err.message || '分析發生錯誤，請檢查 F12 主控台以獲取詳細資訊。');
     } finally {
       setIsLoading(false);
       setLoadingStep('');
     }
   };
+
+  
   
 
   
