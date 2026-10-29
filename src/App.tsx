@@ -106,7 +106,8 @@ export default function App() {
     await triggerAnalysis(b64, mime, name, customPrompt, modelPreference || preferredModel);
   };
 
-  // Call server-side Gemini API with primary and backup fallback mechanism
+  
+// Call Gemini API directly from the client side (Frontend SDK)
   const triggerAnalysis = async (
     b64: string,
     mime: string,
@@ -117,49 +118,62 @@ export default function App() {
     setIsLoading(true);
     setErrorMessage(null);
     setFallbackAlert(null);
-    setLoadingStep('正在透過 Gemini 3.8 Flash 解析工程圖面結構 (若遇 503 將自動無縫切換備用模型)...');
+    setLoadingStep('正在透過前端直連 Gemini 模型解析工程圖面結構...');
 
     try {
-      const actualModel = modelToRequest || preferredModel;
-      const response = await fetch('/api/analyze-rfq', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          fileBase64: b64,
+      // 確保從環境變數或安全方式取得 API Key (若在 Vite 中可使用 import.meta.env.VITE_GEMINI_API_KEY)
+      const apiKey = (import.meta as any).env?.VITE_GEMINI_API_KEY || (window as any).GEMINI_API_KEY || '';
+      
+      if (!apiKey) {
+        throw new Error('找不到 Gemini API Key，請確認是否已在環境變數 (VITE_GEMINI_API_KEY) 中設定。');
+      }
+
+      // 動態引入 Google GenAI SDK
+      const { GoogleGenAI, Type, Schema } = await import('@google/genai');
+      const ai = new GoogleGenAI({ apiKey });
+
+      // 決定要使用的模型 (預設使用 gemini-2.5-flash 或指定模型)
+      const actualModel = modelToRequest && modelToRequest !== 'auto' ? modelToRequest : 'gemini-2.5-flash';
+      
+      setLoadingStep(`正在調用 ${actualModel} 進行圖面特徵擷取...`);
+
+      // 準備上傳的圖片/檔案資料
+      const imagePart = {
+        inlineData: {
+          data: b64,
           mimeType: mime,
-          fileName: name,
-          customPrompt: customPrompt || '',
-          requestedModel: actualModel === 'auto' ? undefined : actualModel,
-        }),
+        },
+      };
+
+      const promptText = customPrompt || '請仔細分析此張工程圖面，擷取所有 Connector、Terminal、線規、線長、數量與加工規格，並嚴格遵循未提及即填「未提供」的原則。';
+
+      // 呼叫 Gemini 模型
+      const response = await ai.models.generateContent({
+        model: actualModel,
+        contents: [imagePart, promptText],
+        config: {
+          responseMimeType: 'application/json',
+          // 如果您的專案有定義回應 Schema，也可以在此處加入 responseSchema
+        }
       });
 
-      setLoadingStep('正在擷取 Connector、Terminal、線規、線長與加工規格...');
-
-      const result = await response.json();
-
-      if (!response.ok || !result.success) {
-        throw new Error(result.error || '工程圖分析失敗，請檢查圖面檔案或稍後再試。');
+      const responseText = response.text();
+      if (!responseText) {
+        throw new Error('模型未回傳任何分析結果資料。');
       }
 
-      setData(result.data);
+      const parsedData = JSON.parse(responseText);
+      setData(parsedData);
 
-      // If backup model was triggered due to 503 or overload, inform user positively
-      if (result.isBackupUsed) {
-        setFallbackAlert(
-          result.fallbackMessage ||
-            `主要模型目前高負載 (503 UNAVAILABLE)，系統已自動啟用備用模型【${result.modelDisplayName || 'Gemini 3.1 Flash Lite'}】順利完成分析！`
-        );
-      }
     } catch (err: any) {
-      console.error('Analysis failed:', err);
-      setErrorMessage(err.message || '分析發生錯誤，請稍後再試。');
+      console.error('Client-side analysis failed:', err);
+      setErrorMessage(err.message || '分析發生錯誤，請檢查圖面檔案或 API Key 是否正確。');
     } finally {
       setIsLoading(false);
       setLoadingStep('');
     }
   };
+  
 
   // Re-analyze current drawing (重新分析)
   const handleReanalyze = () => {
