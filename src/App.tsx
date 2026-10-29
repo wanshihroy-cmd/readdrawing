@@ -130,7 +130,7 @@ export default function App() {
       const { GoogleGenAI, Type } = await import('@google/genai');
       const ai = new GoogleGenAI({ apiKey });
 
-      const actualModel = modelToRequest && modelToRequest !== 'auto' ? modelToRequest : 'gemini-2.5-flash';
+      const actualModel = modelToRequest && modelToRequest !== 'auto' ? modelToRequest : 'gemini-3.8-flash';
       
       setLoadingStep(`正在調用 ${actualModel} 進行圖面特徵擷取...`);
 
