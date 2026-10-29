@@ -129,7 +129,7 @@ export default function App() {
       }
 
       // 動態引入 Google GenAI SDK
-      const { GoogleGenAI, Type, Schema } = await import('@google/genai');
+      const { GoogleGenAI, Type } = await import('@google/genai');
       const ai = new GoogleGenAI({ apiKey });
 
       // 決定要使用的模型 (預設使用 gemini-2.5-flash 或指定模型)
@@ -157,7 +157,7 @@ export default function App() {
         }
       });
 
-      const responseText = response.text();
+      const responseText = response.text;
       if (!responseText) {
         throw new Error('模型未回傳任何分析結果資料。');
       }
